@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSON Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f12;
+    --surface: #13161b;
+    --surface2: #1a1e26;
+    --border: #252933;
+    --border2: #2e3440;
+    --text: #cdd3de;
+    --text-muted: #586070;
+    --text-dim: #3d4452;
+    --accent: #4af0b4;
+    --accent-dim: rgba(74, 240, 180, 0.12);
+    --accent-glow: rgba(74, 240, 180, 0.25);
+    --type-str: #79c0ff;
+    --type-num: #f2a365;
+    --type-bool: #d2a8ff;
+    --type-null: #6e7681;
+    --type-key: #cdd3de;
+    --type-obj: #4af0b4;
+    --type-arr: #ffa657;
+    --error: #ff6b6b;
+    --error-dim: rgba(255, 107, 107, 0.1);
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 52px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .logo span {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .stats {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 4px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+  }
+
+  .stats.hidden { display: none; }
+
+  /* MAIN LAYOUT */
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* EDITOR PANEL */
+  .editor-panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 40px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  .panel-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-family: 'Syne', sans-serif;
+  }
+
+  .panel-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+  }
+
+  button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  button.primary {
+    background: var(--accent);
+    color: #0d0f12;
+    border-color: var(--accent);
+    font-weight: 600;
+    padding: 4px 14px;
+  }
+
+  button.primary:hover {
+    background: #6ff7c5;
+    color: #0d0f12;
+  }
+
+  #editor {
+    flex: 1;
+    background: var(--bg);
+    color: var(--text);
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    tab-size: 2;
+    overflow: auto;
+  }
+
+  #editor::placeholder { color: var(--text-dim); }
+  #editor.error { background: var(--error-dim); }
+
+  .error-bar {
+    display: none;
+    padding: 8px 16px;
+    background: var(--error-dim);
+    border-top: 1px solid rgba(255, 107, 107, 0.25);
+    color: var(--error);
+    font-size: 11px;
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .error-bar.visible { display: block; }
+
+  /* VIEWER PANEL */
+  .viewer-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .search-bar {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .search-bar input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search-bar input:focus { border-color: var(--accent); }
+  .search-bar input::placeholder { color: var(--text-dim); }
+
+  .search-icon {
+    color: var(--text-muted);
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .match-count {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  #tree {
+    flex: 1;
+    overflow: auto;
+    padding: 12px 8px;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 40px;
+  }
+
+  .empty-state .icon {
+    font-size: 40px;
+    opacity: 0.3;
+  }
+
+  .empty-state p {
+    font-size: 12px;
+    line-height: 1.7;
+    max-width: 240px;
+  }
+
+  /* JSON TREE */
+  .node {
+    margin: 0;
+    padding: 0;
+  }
+
+  .node-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    padding: 2px 4px 2px 0;
+    border-radius: 3px;
+    cursor: default;
+    transition: background 0.1s;
+    position: relative;
+    min-height: 22px;
+  }
+
+  .node-row:hover { background: var(--surface2); }
+  .node-row.highlighted { background: rgba(74, 240, 180, 0.08); }
+
+  .indent {
+    display: inline-flex;
+    align-items: stretch;
+    flex-shrink: 0;
+  }
+
+  .indent-line {
+    width: 16px;
+    border-left: 1px solid var(--border);
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+
+  .toggle {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    user-select: none;
+    font-size: 9px;
+    border-radius: 2px;
+    transition: color 0.1s, background 0.1s;
+    margin-top: 1px;
+  }
+
+  .toggle:hover { color: var(--accent); background: var(--accent-dim); }
+  .toggle.leaf { cursor: default; color: var(--text-dim); }
+  .toggle.leaf:hover { color: var(--text-dim); background: none; }
+
+  .node-key {
+    color: var(--type-key);
+    flex-shrink: 0;
+    margin-right: 2px;
+  }
+
+  .colon { color: var(--text-dim); margin-right: 6px; flex-shrink: 0; }
+
+  .node-val { word-break: break-all; }
+  .val-string { color: var(--type-str); }
+  .val-string::before { content: '"'; }
+  .val-string::after { content: '"'; }
+  .val-number { color: var(--type-num); }
+  .val-boolean { color: var(--type-bool); }
+  .val-null { color: var(--type-null); }
+
+  .bracket {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .type-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 8px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    opacity: 0.7;
+    cursor: default;
+  }
+
+  .badge-object { background: rgba(74, 240, 180, 0.12); color: var(--type-obj); }
+  .badge-array { background: rgba(255, 166, 87, 0.12); color: var(--type-arr); }
+
+  .child-count {
+    color: var(--text-muted);
+    font-size: 10px;
+    margin-left: 6px;
+    flex-shrink: 0;
+  }
+
+  .children { margin: 0; }
+  .children.collapsed { display: none; }
+
+  .copy-btn {
+    display: none;
+    margin-left: auto;
+    font-size: 10px;
+    padding: 1px 7px;
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    background: var(--surface2);
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace;
+    transition: all 0.15s;
+  }
+
+  .node-row:hover .copy-btn { display: inline-block; }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  .highlight-match { background: rgba(74, 240, 180, 0.25); border-radius: 2px; }
+
+  /* Collapse all / expand all */
+  .tree-empty { color: var(--text-dim); padding: 20px; text-align: center; font-size: 12px; }
+
+  /* RESIZE HANDLE */
+  .resizer {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 50%;
+    width: 4px;
+    margin-left: -2px;
+    cursor: col-resize;
+    z-index: 10;
+    background: transparent;
+    transition: background 0.15s;
+  }
+
+  .resizer:hover, .resizer.dragging { background: var(--accent-dim); }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">JSON <span>EXPLORER</span></div>
+  <div class="header-actions">
+    <div class="stats hidden" id="stats"></div>
+    <button onclick="collapseAll()">Collapse All</button>
+    <button onclick="expandAll()">Expand All</button>
+    <button class="primary" onclick="parseJSON()">Parse ↵</button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="editor-panel" id="editorPanel">
+    <div class="panel-header">
+      <span class="panel-label">Input</span>
+      <div class="panel-actions">
+        <button onclick="clearEditor()">Clear</button>
+        <button onclick="formatJSON()">Format</button>
+        <button onclick="loadSample()">Sample</button>
+      </div>
+    </div>
+    <textarea id="editor" spellcheck="false" placeholder="Paste your JSON here and click Parse ↵&#10;&#10;Supports objects, arrays, nested structures…"></textarea>
+    <div class="error-bar" id="errorBar"></div>
+  </div>
+
+  <div class="viewer-panel" id="viewerPanel">
+    <div class="panel-header">
+      <span class="panel-label">Explorer</span>
+      <div class="panel-actions">
+        <button onclick="copyPath()" id="copyPathBtn" style="display:none">Copy Path</button>
+      </div>
+    </div>
+    <div class="search-bar">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="searchInput" placeholder="Filter keys or values…" oninput="filterTree(this.value)">
+      <span class="match-count" id="matchCount"></span>
+    </div>
+    <div id="tree">
+      <div class="empty-state">
+        <div class="icon">{ }</div>
+        <p>Paste JSON into the editor and click <strong>Parse</strong> to explore your data</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+let parsedData = null;
+let allNodes = [];
+
+const editor = document.getElementById('editor');
+const tree = document.getElementById('tree');
+const errorBar = document.getElementById('errorBar');
+const stats = document.getElementById('stats');
+const searchInput = document.getElementById('searchInput');
+const matchCount = document.getElementById('matchCount');
+
+// Auto-parse on input after debounce
+let debounceTimer;
+editor.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    if (editor.value.trim()) parseJSON(true);
+  }, 600);
+});
+
+editor.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); parseJSON(); }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = editor.selectionStart, end = editor.selectionEnd;
+    editor.value = editor.value.substring(0, s) + '  ' + editor.value.substring(end);
+    editor.selectionStart = editor.selectionEnd = s + 2;
+  }
+});
+
+function parseJSON(silent = false) {
+  const raw = editor.value.trim();
+  if (!raw) { showError(null); return; }
+  try {
+    parsedData = JSON.parse(raw);
+    showError(null);
+    renderTree(parsedData);
+    updateStats(parsedData);
+    if (searchInput.value) filterTree(searchInput.value);
+  } catch (e) {
+    showError(e.message);
+    if (!silent) tree.innerHTML = `<div class="tree-empty">Fix the JSON error and try again</div>`;
+  }
+}
+
+function showError(msg) {
+  editor.classList.toggle('error', !!msg);
+  errorBar.classList.toggle('visible', !!msg);
+  errorBar.textContent = msg ? '✗ ' + msg : '';
+}
+
+function formatJSON() {
+  try {
+    const parsed = JSON.parse(editor.value.trim());
+    editor.value = JSON.stringify(parsed, null, 2);
+    parseJSON();
+  } catch(e) { showError(e.message); }
+}
+
+function clearEditor() {
+  editor.value = '';
+  showError(null);
+  tree.innerHTML = `<div class="empty-state"><div class="icon">{ }</div><p>Paste JSON into the editor and click <strong>Parse</strong> to explore your data</p></div>`;
+  stats.classList.add('hidden');
+  stats.textContent = '';
+  matchCount.textContent = '';
+  searchInput.value = '';
+  parsedData = null;
+  allNodes = [];
+}
+
+function loadSample() {
+  editor.value = JSON.stringify({
+    "user": {
+      "id": 1042,
+      "name": "Rukshan",
+      "email": "rukshan@entangle.cloud",
+      "active": true,
+      "role": null,
+      "tags": ["founder", "developer", "basel"],
+      "address": {
+        "city": "Basel",
+        "country": "Switzerland",
+        "postcode": "4000"
+      },
+      "projects": [
+        { "id": "p1", "name": "Entangle", "status": "active", "version": 2.1 },
+        { "id": "p2", "name": "Almacare", "status": "active", "version": 1.0 }
+      ],
+      "meta": {
+        "created": "2024-01-15T08:30:00Z",
+        "logins": 247,
+        "preferences": { "theme": "dark", "lang": "en", "notifications": false }
+      }
+    }
+  }, null, 2);
+  parseJSON();
+}
+
+function updateStats(data) {
+  const counts = countNodes(data);
+  stats.textContent = `${counts.keys} keys · ${counts.arrays} arrays · ${counts.depth} depth`;
+  stats.classList.remove('hidden');
+}
+
+function countNodes(data, depth = 0) {
+  let keys = 0, arrays = 0, maxDepth = depth;
+  if (Array.isArray(data)) {
+    arrays++;
+    data.forEach(v => { const c = countNodes(v, depth+1); keys += c.keys; arrays += c.arrays; maxDepth = Math.max(maxDepth, c.depth); });
+  } else if (data !== null && typeof data === 'object') {
+    Object.entries(data).forEach(([, v]) => { keys++; const c = countNodes(v, depth+1); keys += c.keys; arrays += c.arrays; maxDepth = Math.max(maxDepth, c.depth); });
+  }
+  return { keys, arrays, depth: maxDepth };
+}
+
+// ──────────────────────── RENDER TREE ────────────────────────
+
+function renderTree(data) {
+  allNodes = [];
+  tree.innerHTML = '';
+  const root = buildNode(data, null, 0, '', true);
+  tree.appendChild(root);
+}
+
+function buildNode(value, key, depth, path, isLast) {
+  const type = getType(value);
+  const wrapper = document.createElement('div');
+  wrapper.className = 'node';
+
+  const row = document.createElement('div');
+  row.className = 'node-row';
+  row.dataset.path = path;
+  row.dataset.depth = depth;
+
+  // Indent guides
+  const indent = document.createElement('span');
+  indent.className = 'indent';
+  for (let i = 0; i < depth; i++) {
+    const line = document.createElement('span');
+    line.className = 'indent-line';
+    indent.appendChild(line);
+  }
+  row.appendChild(indent);
+
+  const isContainer = type === 'object' || type === 'array';
+
+  // Toggle
+  const toggle = document.createElement('span');
+  toggle.className = 'toggle' + (isContainer ? '' : ' leaf');
+  toggle.textContent = isContainer ? '▾' : '·';
+  row.appendChild(toggle);
+
+  // Key
+  if (key !== null) {
+    const keySpan = document.createElement('span');
+    keySpan.className = 'node-key';
+    keySpan.textContent = typeof key === 'number' ? key : `"${key}"`;
+    row.appendChild(keySpan);
+    const colon = document.createElement('span');
+    colon.className = 'colon';
+    colon.textContent = ':';
+    row.appendChild(colon);
+  }
+
+  // Value / bracket
+  if (isContainer) {
+    const open = document.createElement('span');
+    open.className = 'bracket';
+    open.textContent = type === 'object' ? '{' : '[';
+    row.appendChild(open);
+
+    const badge = document.createElement('span');
+    badge.className = `type-badge badge-${type}`;
+    badge.textContent = type === 'object' ? 'obj' : 'arr';
+    row.appendChild(badge);
+
+    const count = document.createElement('span');
+    count.className = 'child-count';
+    const len = type === 'object' ? Object.keys(value).length : value.length;
+    count.textContent = `${len} ${len === 1 ? 'item' : 'items'}`;
+    row.appendChild(count);
+
+  } else {
+    const valSpan = document.createElement('span');
+    valSpan.className = `node-val val-${type}`;
+    valSpan.textContent = type === 'null' ? 'null' : String(value);
+    valSpan.dataset.raw = String(value).toLowerCase();
+    row.appendChild(valSpan);
+  }
+
+  // Copy path button
+  const cpBtn = document.createElement('button');
+  cpBtn.className = 'copy-btn';
+  cpBtn.textContent = 'copy path';
+  cpBtn.onclick = (e) => { e.stopPropagation(); navigator.clipboard.writeText(path || '$').then(() => { cpBtn.textContent = 'copied!'; setTimeout(() => cpBtn.textContent = 'copy path', 1200); }); };
+  row.appendChild(cpBtn);
+
+  wrapper.appendChild(row);
+
+  // Store for search
+  allNodes.push({ row, key: key !== null ? String(key) : '', value: isContainer ? null : String(value ?? 'null') });
+
+  // Children
+  if (isContainer) {
+    const children = document.createElement('div');
+    children.className = 'children';
+
+    if (type === 'object') {
+      const entries = Object.entries(value);
+      entries.forEach(([k, v], i) => {
+        const childPath = path ? `${path}.${k}` : k;
+        children.appendChild(buildNode(v, k, depth + 1, childPath, i === entries.length - 1));
+      });
+    } else {
+      value.forEach((v, i) => {
+        const childPath = `${path}[${i}]`;
+        children.appendChild(buildNode(v, i, depth + 1, childPath, i === value.length - 1));
+      });
+    }
+
+    // Closing bracket (shown when collapsed)
+    const closeRow = document.createElement('div');
+    closeRow.className = 'node-row';
+    const closeIndent = document.createElement('span');
+    closeIndent.className = 'indent';
+    for (let i = 0; i < depth; i++) {
+      const line = document.createElement('span');
+      line.className = 'indent-line';
+      closeIndent.appendChild(line);
+    }
+    closeRow.appendChild(closeIndent);
+    const closeToggle = document.createElement('span');
+    closeToggle.className = 'toggle leaf';
+    closeToggle.style.visibility = 'hidden';
+    closeRow.appendChild(closeToggle);
+    const close = document.createElement('span');
+    close.className = 'bracket';
+    close.textContent = type === 'object' ? '}' : ']';
+    closeRow.appendChild(close);
+    children.appendChild(closeRow);
+
+    wrapper.appendChild(children);
+
+    toggle.onclick = () => {
+      const collapsed = children.classList.toggle('collapsed');
+      toggle.textContent = collapsed ? '▸' : '▾';
+    };
+  }
+
+  return wrapper;
+}
+
+function getType(val) {
+  if (val === null) return 'null';
+  if (Array.isArray(val)) return 'array';
+  return typeof val;
+}
+
+// ──────────────────────── FILTER ────────────────────────
+
+function filterTree(query) {
+  if (!parsedData) return;
+  const q = query.toLowerCase().trim();
+  matchCount.textContent = '';
+
+  if (!q) {
+    allNodes.forEach(({ row }) => {
+      row.style.display = '';
+      row.classList.remove('highlighted');
+      // Remove highlights
+      const valSpan = row.querySelector('.node-val');
+      if (valSpan) valSpan.innerHTML = valSpan.textContent;
+      const keySpan = row.querySelector('.node-key');
+      if (keySpan) keySpan.innerHTML = keySpan.textContent;
+    });
+    // Show all children
+    document.querySelectorAll('.children.collapsed').forEach(c => { /* leave toggles */ });
+    document.querySelectorAll('.children').forEach(c => c.style.display = '');
+    document.querySelectorAll('.node-row').forEach(r => r.style.display = '');
+    return;
+  }
+
+  let hits = 0;
+  allNodes.forEach(({ row, key, value }) => {
+    const keyMatch = key && key.toLowerCase().includes(q);
+    const valMatch = value && value.toLowerCase().includes(q);
+
+    if (keyMatch || valMatch) {
+      row.style.display = '';
+      row.classList.add('highlighted');
+      hits++;
+      // Expand parents
+      let parent = row.parentElement;
+      while (parent && parent !== tree) {
+        if (parent.classList.contains('children')) {
+          parent.style.display = '';
+          parent.classList.remove('collapsed');
+          const toggle = parent.previousSibling?.querySelector('.toggle');
+          if (toggle && !toggle.classList.contains('leaf')) toggle.textContent = '▾';
+        }
+        parent = parent.parentElement;
+      }
+    } else {
+      row.classList.remove('highlighted');
+    }
+  });
+
+  matchCount.textContent = hits ? `${hits} match${hits !== 1 ? 'es' : ''}` : 'no matches';
+}
+
+function collapseAll() {
+  document.querySelectorAll('.children').forEach(c => c.classList.add('collapsed'));
+  document.querySelectorAll('.toggle:not(.leaf)').forEach(t => t.textContent = '▸');
+}
+
+function expandAll() {
+  document.querySelectorAll('.children').forEach(c => c.classList.remove('collapsed'));
+  document.querySelectorAll('.toggle:not(.leaf)').forEach(t => t.textContent = '▾');
+}
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  }
+});
+</script>
+</body>
+</html>
